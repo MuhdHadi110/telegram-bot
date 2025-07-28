@@ -4,9 +4,13 @@ import schedule
 import time
 import threading
 from datetime import datetime, timedelta
+import pytz
 from telegram import Update
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from config import BOT_TOKEN, CHAT_ID, TARGET_BOT_USERNAME, EXPECTED_MESSAGES, MESSAGE_PATTERNS
+
+# Set timezone to Malaysia
+MALAYSIA_TZ = pytz.timezone('Asia/Kuala_Lumpur')
 
 # Set up logging
 logging.basicConfig(
@@ -34,8 +38,8 @@ class MessagePointTracker:
         return None
         
     def get_current_hour_key(self):
-        """Get current hour as tracking key"""
-        return datetime.now().strftime('%Y-%m-%d-%H')
+        """Get current hour as tracking key (Malaysia time)"""
+        return datetime.now(MALAYSIA_TZ).strftime('%Y-%m-%d-%H')
     
     def get_hour_display(self, hour_key):
         """Convert hour key to display format"""
@@ -76,7 +80,7 @@ class MessagePointTracker:
     
     async def send_hourly_summary(self):
         """Send hourly summary at 59:15"""
-        current_time = datetime.now()
+        current_time = datetime.now(MALAYSIA_TZ)
         hour_key = current_time.strftime('%Y-%m-%d-%H')
         
         # Get received points for this hour
@@ -107,7 +111,7 @@ class MessagePointTracker:
 ❌ *Missing:* {', '.join(sorted(missing)) if missing else 'None'}
 
 *Status:* {status}
-*Time:* {current_time.strftime('%H:%M:%S')}
+*Time:* {current_time.strftime('%H:%M:%S')} MYT
         """
         
         # Send to group
@@ -169,7 +173,7 @@ class MessagePointTracker:
         received = self.hourly_tracker.get(hour_key, set())
         missing = set(EXPECTED_MESSAGES) - received
         
-        current_time = datetime.now()
+        current_time = datetime.now(MALAYSIA_TZ)
         minutes_left = 59 - current_time.minute
         
         # Escape underscore in bot username for Markdown
@@ -177,7 +181,7 @@ class MessagePointTracker:
         
         status_msg = f"""📊 *Current Hour Status:*
 
-🕐 *Time:* {current_time.strftime('%H:%M:%S')} ({minutes_left} min left)
+🕐 *Time:* {current_time.strftime('%H:%M:%S')} MYT ({minutes_left} min left)
 📨 *From @{bot_name_escaped}:* {len(received)}/4
 
 ✅ *Received:* {', '.join(sorted(received)) if received else 'None'}
@@ -190,7 +194,7 @@ class MessagePointTracker:
         except Exception as e:
             logger.error(f"Error sending status response: {e}")
             # Try without markdown as fallback
-            simple_msg = f"Current Hour Status:\nTime: {current_time.strftime('%H:%M:%S')} ({minutes_left} min left)\nFrom @{TARGET_BOT_USERNAME}: {len(received)}/4\nReceived: {', '.join(sorted(received)) if received else 'None'}\nWaiting for: {', '.join(sorted(missing)) if missing else 'All complete!'}"
+            simple_msg = f"Current Hour Status:\nTime: {current_time.strftime('%H:%M:%S')} MYT ({minutes_left} min left)\nFrom @{TARGET_BOT_USERNAME}: {len(received)}/4\nReceived: {', '.join(sorted(received)) if received else 'None'}\nWaiting for: {', '.join(sorted(missing)) if missing else 'All complete!'}"
             await update.message.reply_text(simple_msg)
     
     def run_bot(self):
