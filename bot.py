@@ -44,11 +44,16 @@ class MessagePointTracker:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming messages and track specific points from target bot"""
+        # Debug logging
+        logger.info(f"Received message from chat {update.effective_chat.id}, user: {update.message.from_user.username if update.message.from_user else 'None'}")
+        logger.info(f"CHAT_ID configured: {CHAT_ID} (type: {type(CHAT_ID)})")
+        
         # Only process messages from the target group
         if update.effective_chat.id != CHAT_ID:
+            logger.info(f"Ignoring message - wrong chat. Expected: {CHAT_ID}, Got: {update.effective_chat.id}")
             return
             
-        # Only process messages from @MyCAEVC_bot
+        # Only process messages from @MyCAEVC_bot (not commands from users)
         if (update.message.from_user and 
             update.message.from_user.username == TARGET_BOT_USERNAME):
             
@@ -66,8 +71,8 @@ class MessagePointTracker:
                 self.hourly_tracker[hour_key].add(point_type)
                 
                 logger.info(f"{point_type} from @{TARGET_BOT_USERNAME} logged for hour {hour_key}")
-                
-                # No real-time notifications - just log silently
+        else:
+            logger.info(f"Message not from target bot @{TARGET_BOT_USERNAME}, ignoring")
     
     async def send_hourly_summary(self):
         """Send hourly summary at 59:15"""
@@ -152,6 +157,14 @@ class MessagePointTracker:
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /status command for current hour progress (optional manual check)"""
+        logger.info(f"Status command received from chat {update.effective_chat.id}, user: {update.message.from_user.username if update.message.from_user else 'None'}")
+        logger.info(f"CHAT_ID configured: {CHAT_ID} (type: {type(CHAT_ID)})")
+        
+        # Check if command is from correct chat
+        if update.effective_chat.id != CHAT_ID:
+            logger.info(f"Status command from wrong chat. Expected: {CHAT_ID}, Got: {update.effective_chat.id}")
+            return
+        
         hour_key = self.get_current_hour_key()
         received = self.hourly_tracker.get(hour_key, set())
         missing = set(EXPECTED_MESSAGES) - received
@@ -171,23 +184,33 @@ class MessagePointTracker:
 ⏳ *Waiting for:* {', '.join(sorted(missing)) if missing else 'All complete!'}
         """
         
-        await update.message.reply_text(status_msg, parse_mode='Markdown')
+        try:
+            await update.message.reply_text(status_msg, parse_mode='Markdown')
+            logger.info("Status response sent successfully")
+        except Exception as e:
+            logger.error(f"Error sending status response: {e}")
+            # Try without markdown as fallback
+            simple_msg = f"Current Hour Status:\nTime: {current_time.strftime('%H:%M:%S')} ({minutes_left} min left)\nFrom @{TARGET_BOT_USERNAME}: {len(received)}/4\nReceived: {', '.join(sorted(received)) if received else 'None'}\nWaiting for: {', '.join(sorted(missing)) if missing else 'All complete!'}"
+            await update.message.reply_text(simple_msg)
     
     def run_bot(self):
         """Start the bot"""
         # Create application
         self.application = Application.builder().token(BOT_TOKEN).build()
         
-        # Add handlers - only message handler for tracking
-        self.application.add_handler(MessageHandler(filters.TEXT, self.handle_message))
-        
-        # Optional: Keep status command for manual checking
+        # IMPORTANT: Add CommandHandler BEFORE MessageHandler
+        # Commands should be processed before general messages
         self.application.add_handler(CommandHandler("status", self.status_command))
+        
+        # Add message handler for tracking (only processes non-command messages)
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
         
         # Start scheduler for hourly summaries
         self.schedule_summaries()
         
         logger.info(f"Bot starting... Monitoring @{TARGET_BOT_USERNAME} for hourly summaries at 59:15")
+        logger.info(f"Configured CHAT_ID: {CHAT_ID} (type: {type(CHAT_ID)})")
+        logger.info(f"Bot token: {BOT_TOKEN[:20]}...")
         
         # Run bot
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
