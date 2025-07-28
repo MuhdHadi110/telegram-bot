@@ -92,21 +92,20 @@ class MessagePointTracker:
             status = "❌ NO MESSAGES"
             status_emoji = "🔴"
         
-        summary = f"""{status_emoji} **Hour {hour_display} Summary:**
+        summary = f"""{status_emoji} Hour {hour_display} Summary:
 
-📊 **Messages from @{TARGET_BOT_USERNAME}:**
-✅ **Received:** {', '.join(sorted(received)) if received else 'None'} ({len(received)}/4)
-❌ **Missing:** {', '.join(sorted(missing)) if missing else 'None'}
+Messages from @{TARGET_BOT_USERNAME}:
+Received: {', '.join(sorted(received)) if received else 'None'} ({len(received)}/4)
+Missing: {', '.join(sorted(missing)) if missing else 'None'}
 
-**Status:** {status}
-**Time:** {current_time.strftime('%H:%M:%S')}
+Status: {status}
+Time: {current_time.strftime('%H:%M:%S')}
         """
         
         # Send to group
         await self.application.bot.send_message(
             chat_id=CHAT_ID,
-            text=summary,
-            parse_mode='Markdown'
+            text=summary
         )
         
         logger.info(f"Sent summary for hour {hour_key}: {len(received)}/{len(EXPECTED_MESSAGES)} points ({list(received)})")
@@ -156,16 +155,16 @@ class MessagePointTracker:
         current_time = datetime.now()
         minutes_left = 59 - current_time.minute
         
-        status_msg = f"""📊 **Current Hour Status:**
+        status_msg = f"""Current Hour Status:
 
-🕐 **Time:** {current_time.strftime('%H:%M:%S')} ({minutes_left} min left)
-📨 **From @{TARGET_BOT_USERNAME}:** {len(received)}/4
+Time: {current_time.strftime('%H:%M:%S')} ({minutes_left} min left)
+From @{TARGET_BOT_USERNAME}: {len(received)}/4
 
-✅ **Received:** {', '.join(sorted(received)) if received else 'None'}
-⏳ **Waiting for:** {', '.join(sorted(missing)) if missing else 'All complete!'}
+Received: {', '.join(sorted(received)) if received else 'None'}
+Waiting for: {', '.join(sorted(missing)) if missing else 'All complete!'}
         """
         
-        await update.message.reply_text(status_msg, parse_mode='Markdown')
+        await update.message.reply_text(status_msg)
     
     def run_bot(self):
         """Start the bot"""
