@@ -38,18 +38,22 @@ class MessagePointTracker:
         return None
         
     def get_current_hour_key(self):
-        """Get current hour as tracking key (Malaysia time)"""
-        return datetime.now(MALAYSIA_TZ).strftime('%Y-%m-%d-%H')
+        """Get current hour as tracking key (use UTC for consistency)"""
+        return datetime.utcnow().strftime('%Y-%m-%d-%H')
     
     def get_hour_display(self, hour_key):
-        """Convert hour key to display format"""
-        dt = datetime.strptime(hour_key, '%Y-%m-%d-%H')
-        return dt.strftime('%H:00-%H:59')
+        """Convert hour key to display format in Malaysia time"""
+        dt_utc = datetime.strptime(hour_key, '%Y-%m-%d-%H')
+        dt_utc = pytz.utc.localize(dt_utc)
+        dt_malaysia = dt_utc.astimezone(MALAYSIA_TZ)
+        return dt_malaysia.strftime('%H:00-%H:59')
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming messages and track specific points from target bot"""
         # Debug logging
-        logger.info(f"Received message from chat {update.effective_chat.id}, user: {update.message.from_user.username if update.message.from_user else 'None'}")
+        sender_username = update.message.from_user.username if update.message.from_user else 'None'
+        logger.info(f"Received message from chat {update.effective_chat.id}, user: @{sender_username}")
+        logger.info(f"Looking for messages from: @{TARGET_BOT_USERNAME}")
         logger.info(f"CHAT_ID configured: {CHAT_ID} (type: {type(CHAT_ID)})")
         
         # Only process messages from the target group
@@ -61,6 +65,7 @@ class MessagePointTracker:
         if (update.message.from_user and 
             update.message.from_user.username == TARGET_BOT_USERNAME):
             
+            logger.info(f"✅ Message from target bot @{TARGET_BOT_USERNAME} detected!")
             message_text = update.message.text
             point_type = self.identify_message_point(message_text)
             
@@ -74,14 +79,20 @@ class MessagePointTracker:
                 # Add point to tracker
                 self.hourly_tracker[hour_key].add(point_type)
                 
-                logger.info(f"{point_type} from @{TARGET_BOT_USERNAME} logged for hour {hour_key}")
+                logger.info(f"🎯 {point_type} from @{TARGET_BOT_USERNAME} logged for hour {hour_key}")
+            else:
+                logger.info(f"Message from @{TARGET_BOT_USERNAME} but no P1/P2/P3/P4 detected: {message_text[:50]}...")
         else:
-            logger.info(f"Message not from target bot @{TARGET_BOT_USERNAME}, ignoring")
+            if sender_username and sender_username != 'None':
+                logger.info(f"Message from @{sender_username} (not target bot @{TARGET_BOT_USERNAME}), ignoring")
+            else:
+                logger.info(f"Message from unknown user (not target bot @{TARGET_BOT_USERNAME}), ignoring")
     
     async def send_hourly_summary(self):
         """Send hourly summary at 59:15"""
-        current_time = datetime.now(MALAYSIA_TZ)
-        hour_key = current_time.strftime('%Y-%m-%d-%H')
+        current_time_utc = datetime.utcnow()
+        current_time_malaysia = datetime.now(MALAYSIA_TZ)
+        hour_key = current_time_utc.strftime('%Y-%m-%d-%H')
         
         # Get received points for this hour
         received = self.hourly_tracker.get(hour_key, set())
@@ -111,7 +122,7 @@ class MessagePointTracker:
 ❌ *Missing:* {', '.join(sorted(missing)) if missing else 'None'}
 
 *Status:* {status}
-*Time:* {current_time.strftime('%H:%M:%S')} MYT
+*Time:* {current_time_malaysia.strftime('%H:%M:%S')} MYT
         """
         
         # Send to group
@@ -128,7 +139,7 @@ class MessagePointTracker:
     
     def cleanup_old_data(self):
         """Remove data older than 24 hours"""
-        current_time = datetime.now()
+        current_time = datetime.utcnow()
         cutoff_time = current_time - timedelta(hours=24)
         cutoff_key = cutoff_time.strftime('%Y-%m-%d-%H')
         
@@ -147,7 +158,7 @@ class MessagePointTracker:
         
         # Run scheduler in separate thread
         threading.Thread(target=scheduler_thread, daemon=True).start()
-        logger.info("Scheduler started - summaries at 59:15 of each hour")
+        logger.info("Scheduler started - summaries at 59:15 UTC (07:59:15 MYT)")
     
     def run_summary(self):
         """Wrapper to run async summary in sync context"""
@@ -169,23 +180,25 @@ class MessagePointTracker:
             logger.info(f"Status command from wrong chat. Expected: {CHAT_ID}, Got: {update.effective_chat.id}")
             return
         
-        hour_key = self.get_current_hour_key()
+        hour_key = self.get_current_hour_key()  # This uses UTC
         received = self.hourly_tracker.get(hour_key, set())
         missing = set(EXPECTED_MESSAGES) - received
         
-        current_time = datetime.now(MALAYSIA_TZ)
-        minutes_left = 59 - current_time.minute
+        current_time_malaysia = datetime.now(MALAYSIA_TZ)
+        minutes_left = 59 - current_time_malaysia.minute
         
         # Escape underscore in bot username for Markdown
         bot_name_escaped = TARGET_BOT_USERNAME.replace('_', '\\_')
         
         status_msg = f"""📊 *Current Hour Status:*
 
-🕐 *Time:* {current_time.strftime('%H:%M:%S')} MYT ({minutes_left} min left)
+🕐 *Time:* {current_time_malaysia.strftime('%H:%M:%S')} MYT ({minutes_left} min left)
 📨 *From @{bot_name_escaped}:* {len(received)}/4
 
 ✅ *Received:* {', '.join(sorted(received)) if received else 'None'}
 ⏳ *Waiting for:* {', '.join(sorted(missing)) if missing else 'All complete!'}
+
+*Debug:* Tracking hour {hour_key} UTC
         """
         
         try:
@@ -194,7 +207,7 @@ class MessagePointTracker:
         except Exception as e:
             logger.error(f"Error sending status response: {e}")
             # Try without markdown as fallback
-            simple_msg = f"Current Hour Status:\nTime: {current_time.strftime('%H:%M:%S')} MYT ({minutes_left} min left)\nFrom @{TARGET_BOT_USERNAME}: {len(received)}/4\nReceived: {', '.join(sorted(received)) if received else 'None'}\nWaiting for: {', '.join(sorted(missing)) if missing else 'All complete!'}"
+            simple_msg = f"Current Hour Status:\nTime: {current_time_malaysia.strftime('%H:%M:%S')} MYT ({minutes_left} min left)\nFrom @{TARGET_BOT_USERNAME}: {len(received)}/4\nReceived: {', '.join(sorted(received)) if received else 'None'}\nWaiting for: {', '.join(sorted(missing)) if missing else 'All complete!'}\nDebug: Tracking hour {hour_key} UTC"
             await update.message.reply_text(simple_msg)
     
     def run_bot(self):
@@ -212,7 +225,8 @@ class MessagePointTracker:
         # Start scheduler for hourly summaries
         self.schedule_summaries()
         
-        logger.info(f"Bot starting... Monitoring @{TARGET_BOT_USERNAME} for hourly summaries at 59:15")
+        logger.info(f"Bot starting... Monitoring @{TARGET_BOT_USERNAME} for hourly summaries")
+        logger.info(f"Summaries at 59:15 UTC (07:59:15 MYT)")
         logger.info(f"Configured CHAT_ID: {CHAT_ID} (type: {type(CHAT_ID)})")
         logger.info(f"Bot token: {BOT_TOKEN[:20]}...")
         
