@@ -2,7 +2,7 @@
 import os
 
 # Use environment variables for security
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8433489269:AAESo9eCCtNdTmxL39Wfus-U4dYfIgC-2JE')
+BOT_TOKEN = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
 CHAT_ID = int(os.getenv('CHAT_ID', '-1002180864230'))
 
 TARGET_BOT_USERNAME = "MyCAEVC_bot"
