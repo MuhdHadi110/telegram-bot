@@ -230,8 +230,36 @@ class MessagePointTracker:
         logger.info(f"Configured CHAT_ID: {CHAT_ID} (type: {type(CHAT_ID)})")
         logger.info(f"Bot token: {BOT_TOKEN[:20]}...")
         
+        # Start simple web server for Render (background thread)
+        self.start_health_server()
+        
         # Run bot
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    def start_health_server(self):
+        """Start a simple health check server for Render"""
+        import os
+        from http.server import HTTPServer, BaseHTTPRequestHandler
+        
+        class HealthHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                self.wfile.write(b'Bot is running!')
+            
+            def log_message(self, format, *args):
+                # Suppress HTTP server logs
+                pass
+        
+        def run_server():
+            port = int(os.environ.get('PORT', 10000))
+            httpd = HTTPServer(('', port), HealthHandler)
+            logger.info(f"Health server started on port {port}")
+            httpd.serve_forever()
+        
+        # Run server in background thread
+        threading.Thread(target=run_server, daemon=True).start()
 
 if __name__ == "__main__":
     tracker = MessagePointTracker()
