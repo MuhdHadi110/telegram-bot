@@ -124,12 +124,9 @@ class MessagePointTracker:
             status = "❌ NO MESSAGES"
             status_emoji = "🔴"
         
-        # Escape underscore in bot username for Markdown
-        bot_name_escaped = TARGET_BOT_USERNAME.replace('_', '\\_')
-        
         summary = f"""{status_emoji} *Hour {hour_display} Summary:*
 
-📊 *Messages from @{bot_name_escaped}:*
+📊 *Messages from @{TARGET_BOT_USERNAME}:*
 ✅ *Received:* {', '.join(sorted(received)) if received else 'None'} ({len(received)}/4)
 ❌ *Missing:* {', '.join(sorted(missing)) if missing else 'None'}
 
@@ -199,13 +196,10 @@ class MessagePointTracker:
         current_time_malaysia = datetime.now(MALAYSIA_TZ)
         minutes_left = 59 - current_time_malaysia.minute
         
-        # Escape underscore in bot username for Markdown
-        bot_name_escaped = TARGET_BOT_USERNAME.replace('_', '\\_')
-        
         status_msg = f"""📊 *Current Hour Status:*
 
 🕐 *Time:* {current_time_malaysia.strftime('%H:%M:%S')} MYT ({minutes_left} min left)
-📨 *From @{bot_name_escaped}:* {len(received)}/4
+📨 *From @{TARGET_BOT_USERNAME}:* {len(received)}/4
 
 ✅ *Received:* {', '.join(sorted(received)) if received else 'None'}
 ⏳ *Waiting for:* {', '.join(sorted(missing)) if missing else 'All complete!'}
