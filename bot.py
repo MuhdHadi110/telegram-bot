@@ -50,48 +50,55 @@ class MessagePointTracker:
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle incoming messages and track specific points from target bot"""
-        # Debug logging - show ALL message details
-        sender_username = update.message.from_user.username if update.message.from_user else 'None'
-        sender_first_name = update.message.from_user.first_name if update.message.from_user else 'None'
-        message_text = update.message.text[:100] if update.message.text else 'No text'
-        
-        logger.info(f"📨 MESSAGE RECEIVED:")
-        logger.info(f"  Chat ID: {update.effective_chat.id}")
-        logger.info(f"  Sender username: @{sender_username}")
-        logger.info(f"  Sender first_name: {sender_first_name}")
-        logger.info(f"  Message text: {message_text}")
-        logger.info(f"  Looking for: @{TARGET_BOT_USERNAME}")
-        logger.info(f"  Expected chat: {CHAT_ID}")
-        
-        # Only process messages from the target group
-        if update.effective_chat.id != CHAT_ID:
-            logger.info(f"❌ Wrong chat - ignoring")
-            return
+        try:
+            # Debug logging - show ALL message details
+            sender_username = update.message.from_user.username if update.message.from_user else 'None'
+            sender_first_name = update.message.from_user.first_name if update.message.from_user else 'None'
+            message_text = update.message.text[:100] if update.message.text else 'No text'
             
-        # Check if sender matches target bot
-        if (update.message.from_user and 
-            update.message.from_user.username == TARGET_BOT_USERNAME):
+            logger.info(f"📨 MESSAGE RECEIVED:")
+            logger.info(f"  Chat ID: {update.effective_chat.id}")
+            logger.info(f"  Sender username: @{sender_username}")
+            logger.info(f"  Sender first_name: {sender_first_name}")
+            logger.info(f"  Message text: {message_text}")
+            logger.info(f"  Looking for: @{TARGET_BOT_USERNAME}")
+            logger.info(f"  Expected chat: {CHAT_ID}")
             
-            logger.info(f"✅ Message from target bot @{TARGET_BOT_USERNAME} detected!")
-            point_type = self.identify_message_point(message_text)
-            logger.info(f"🔍 Point detection result: {point_type}")
-            
-            if point_type:
-                hour_key = self.get_current_hour_key()
+            # Only process messages from the target group
+            if update.effective_chat.id != CHAT_ID:
+                logger.info(f"❌ Wrong chat - ignoring")
+                return
                 
-                # Initialize hour tracker if needed
-                if hour_key not in self.hourly_tracker:
-                    self.hourly_tracker[hour_key] = set()
+            # Check if sender matches target bot
+            if (update.message.from_user and 
+                update.message.from_user.username == TARGET_BOT_USERNAME):
                 
-                # Add point to tracker
-                self.hourly_tracker[hour_key].add(point_type)
+                logger.info(f"✅ Message from target bot @{TARGET_BOT_USERNAME} detected!")
+                point_type = self.identify_message_point(message_text)
+                logger.info(f"🔍 Point detection result: {point_type}")
                 
-                logger.info(f"🎯 SUCCESS: {point_type} logged for hour {hour_key}")
-                logger.info(f"📊 Current hour data: {list(self.hourly_tracker[hour_key])}")
+                if point_type:
+                    hour_key = self.get_current_hour_key()
+                    
+                    # Initialize hour tracker if needed
+                    if hour_key not in self.hourly_tracker:
+                        self.hourly_tracker[hour_key] = set()
+                    
+                    # Add point to tracker
+                    self.hourly_tracker[hour_key].add(point_type)
+                    
+                    logger.info(f"🎯 SUCCESS: {point_type} logged for hour {hour_key}")
+                    logger.info(f"📊 Current hour data: {list(self.hourly_tracker[hour_key])}")
+                else:
+                    logger.info(f"❌ No P1/P2/P3/P4 pattern found in message")
             else:
-                logger.info(f"❌ No P1/P2/P3/P4 pattern found in message")
-        else:
-            logger.info(f"❌ Sender @{sender_username} ≠ target @{TARGET_BOT_USERNAME} - ignoring")
+                logger.info(f"❌ Sender @{sender_username} ≠ target @{TARGET_BOT_USERNAME} - ignoring")
+                
+        except Exception as e:
+            logger.error(f"🚨 ERROR in handle_message: {e}")
+            logger.error(f"🚨 Update object: {update}")
+            import traceback
+            logger.error(f"🚨 Traceback: {traceback.format_exc()}")
     
     async def send_hourly_summary(self):
         """Send hourly summary at 59:15"""
